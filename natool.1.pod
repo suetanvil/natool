@@ -1,0 +1,992 @@
+
+
+=head1 NAME
+
+natool - Synch tool for the Neuros and Neuros 2 Digital Audio Computers.
+
+=head1 SYNOPSIS
+
+B<natool> [I<flags>] I<natool_command> [I<command_flags>] I<command_args> [I<natool_command2> I<command_flags> [I<command2_args>] ] ...
+
+=head1 DESCRIPTION
+
+C<natool> is a (somewhat) simple command-line synchronization tool for
+the Neuros II Digital Audio Computer (from here on just called
+"Neuros").  It should run on any reasonably modern computer running a
+Unix-ish operating system.  Unlike other such programs, it does not
+try to manage your audio library.
+
+Principally, it does three things:
+
+=over
+
+=item 1)
+
+It creates the index database in WOID_DB used by the Neuros to find
+its files.
+
+=item 2)
+
+It (mostly) takes care of filesystem and character encoding
+differences between Unix and the Neuros.  Non-ASCII characters in
+filenames and ID3 tags are replaced with ASCII sequences and file copy
+commands are aware that the Neuros' file system is case-insensitive.
+
+=item 3)
+
+It keeps specified subdirectories on the workstation and Neuros
+synchronized in a manner superficially similar to B<rsync>.  Unlike
+B<rsync>, C<natool> is aware of the encoding limitations of the
+Neuros.
+
+=back
+
+What C<natool> is B<not> is a music management program.  It doesn't
+play music, help you organize your library or provide you with a nice
+GUI.  It is written with the assumption that you already have some
+kind of management scheme set up and the last thing you want is some
+other program to try to impose its own twisted scheme on you.
+
+
+=head1 EXAMPLES FOR THE IMPATIENT
+
+Here are some examples illustrating common tasks.  For simplicity, we
+assume that
+
+=over 4
+
+=item 1)
+
+The Neuros is mounted at C</mnt/neuros/>
+
+=item 2)
+
+Your music library is located at C<~/music/>
+
+=back
+
+For readability, I will separate parts of the command with escaped
+linebreaks (i.e. trailing backslash ("\") characters).
+
+=head2 Creating the WOID_DB database
+
+Suppose you have a Neuros with a bunch of music on it and you want to
+give natool a try. Just do:
+
+	natool --neuros-path /mnt/neuros \
+		scan \
+		dbsync
+
+If you're concerned that your master list has gotten corrupted in some
+way, you can run B<scan> with the B<--full> option:
+
+	natool --neuros-path /mnt/neuros \
+		scan --full \
+		dbsync
+
+This will completely rebuild the master list from only the audio files
+on the device.  Without B<--full>, B<natool> will attempt to use the
+existing master list (if there is one) to save time.
+
+=head2 Copying Your Music to an Empty Neuros
+
+Suppose you have an empty Neuros and now want to copy your music
+library onto it.  Just do this:
+
+	natool --neuros-path /mnt/neuros \
+		dirsync ~/music/ my_music \
+		dbsync
+
+Your Neuros will now be ready for use.
+
+=head2 Synchronizing Your Neuros and Music Directory
+
+If you have only ever used C<natool> to copy files between C<~/music>
+and C</mnt/neuros/my_music>, you can simply resynchronize like this:
+
+	natool --neuros-path /mnt/neuros \
+		dirsync --cleanup ~/music/ my_music \
+		dbsync
+
+B<Warning>: this will B<delete files> in the C<my_music> directory on
+the Neuros if they have no corresponding file in C<~/music>.
+
+If you want those files copied to C<~/music> instead, do this:
+
+	natool --neuros-path /mnt/neuros \
+		dirsync --adopt ~/music/ my_music \
+		dbsync
+
+
+Finally, if you have both added files to the Neuros that you want to
+keep and removed or renamed files in C<~/music> that you want echoed
+onto the Neuros, things will be a bit trickier.
+
+First, you need to get a list of files to recover.  Do this:
+
+	natool --neuros-path /mnt/neuros \
+		dirsync --fake --adopt ~/music/ my_music > changes.sh
+
+Now, edit C<changes.sh> with your preferred text editor.
+C<changes.sh> is a shell script which will (usually) do the expected
+copying.  Remove all copies from C<~/music> to the Neuros from the
+list.  Then, review the copies from the Neuros to C<~/music> and
+remove any files you don't want to keep.  Finally, run the script:
+
+	sh changes.sh
+
+Now, you just need to copy the new files to the Neuros and delete the
+dross, then rebuild the master list and Neuros database:
+
+	natool --neuros-path /mnt/neuros \
+		dirsync --cleanup ~/music/ my_music \
+		scan \
+		dbsync
+
+Now, your Neuros and music library should match again.
+
+=head1 THE MASTER LIST
+
+C<natool> maintains a file called the B<master list> on the Neuros.
+This is a tab-delimited text file containing the metadata for all of
+the audio files.  Its contents are written to a Neuros' WOID_DB
+database by the B<dbsync> subcommand (along with the playlists).
+
+Mostly, you don't need to know anything about it (although if you're
+curious, see the B<FILES> section below).  However, most C<natool>
+subcommands either read or modify the master list and it is often
+helpful to explain what a subcommand does in those terms.
+
+For example, the B<install> command will copy a file onto the Neuros
+and put its metadata (title, artist, etc.) in the master list.
+However, that file will not show up on the Neuros' display until you
+have created the database with B<dbsync>.
+
+The documentation for the various subcommands below explains how the
+command interacts with the master list.
+
+Note also that the master list is read lazily--that is, only loaded
+when needed--so judicious use of options and command grouping can save
+you time and/or let you do certain things without a Neuros being
+present.
+
+
+=head1 COMMON OPTIONS
+
+The following options apply to C<natool> as a whole, regardless of
+subcommand.  With three exceptions (B<--help>, B<--version> and
+B<--args>), they must appear before the first subcommand.
+
+=over 4
+
+=item B<--neuros-path>=PATH
+
+This option specifies the path to the Neuros' mountpoint.  If not
+given, C<natool> will try using the environment variable
+B<NATOOL_NEUROS_PATH> to find the path.  If that fails, it will quit
+with an error.
+
+=item B<--no-check>
+
+Normally, C<natool> will do some sanity checks on the Neuros' mount
+point to make sure there's actually a device there.  This option
+disables those checks.
+
+This is useful for testing C<natool> using an ordinary directory but
+there may also a few cases where you will need to use this on an
+actual Neuros.  (For example, C<natool> checks for the presence of
+certain files and directories, one of them being C<WOID_DB>.  If
+you've blown yours away, C<natool> will recreate it for you but you'll
+need to tell it to disregard that directory's absence.)
+
+=item B<--alt-ml-dir>=PATH
+
+Specifies an alternate directory from which to read the master list.
+This is different from B<--neuros-path> because the modified master
+list will not be B<written> there.  This is handy if you have a
+backed-up master list you want to use as a starting point.
+
+=item B<--verbose>
+
+Causes C<natool> to print more informative messages while running.
+
+=item B<--args>=ARG_FILE
+
+Replaces itself with the contents of C<ARG_FILE> in the argument list.
+It is notionally equivalent to putting C<`cat ARG_FILE`> on the
+command-line but isn't subject to your operating system's command-line
+length limit.
+
+The B<--args> flag may appear anywhere in the command line and may be
+used multiple times.
+
+C<ARG_FILE> is not parsed by the shell and so may have different
+tokenization rules.  See B<ARGUMENT FILES> below for more details.
+
+=item B<--help>, B<--version>
+
+Immediately prints a summary of the subcommands and arguments or a
+version number in the case of C<--version> and exits.  This happens
+before most other arguments are processed so they do not need to be
+correct.
+
+The C<--help> and C<--version> flag may appear anywhere in the command
+line.
+
+=back
+
+
+=head1 SUBCOMMANDS
+
+In the style of B<cvs>, B<natool> takes various subcommands on the
+command-line and these determine what it does.  However, B<natool>
+allows multiple subcommands in the same command line.  This can
+substantially speed up multiple commands because it keeps natool from
+repeatedly saving and reloading the master list.
+
+Note, however, that B<natool> interprets any word corresponding to a
+subcommand as the start of a new subcommand, regardless of context.
+In the unlikely case that a local file or directory has the name of
+subcommand, you will need to add leading or trailing path elements to
+distinguish it from the subcommand.  Instead of:
+
+    natool convert drop	   # WRONG!  'drop' is a subcommand.
+
+you will need to do something like:
+
+    natool convert ./drop
+
+or
+
+    natool convert drop/
+
+C<natool> implements the following subcommands:
+
+
+=head2 dbsync
+
+This command creates the Neuros' file database from the master list.
+These are the files that reside in C</mnt/neuros/WOID_DB/>.  It does
+not modify the master list.
+
+It takes no options.
+
+=head2 scan [--full]
+
+C<scan> builds a master list from the metadata in the audio files on
+the Neuros.
+
+=head3 Options:
+
+=over 8
+
+=item B<--full>
+
+Normally, C<scan> uses the existing master list (if present) as a
+source of metadata to avoid having to re-read the audio files already
+mentioned.  This flag disables that behaviour and forces C<scan> to
+rebuild the master list from scratch.
+
+=back
+
+Naturally, C<scan> modifies the master list but it only reads it if
+C<--full> was not given.
+
+=head2 addpl I<playlist_name> I<audio_file>...
+
+Appends all given audio files to the given playlist.  If the playlist
+does not exist, it is created.
+
+Each audio file must be a file on the Neuros and the path given must
+be relative to the Neuros mountpoint.  Example:
+
+    natool addpl my_playlist music/77s/Pray_Naked/Kites_Without_Strings.mp3
+
+This would add the file
+C</mnt/neuros/music/77s/Pray_Naked/Kites_Without_Strings.mp3> to the
+playlist C<my_playlist>.
+
+The playlist name must consist only of alphanumeric characters and/or
+the underscore ("_") and may be no longer than 63 characters.  All
+other characters are illegal.
+
+It reads but does not modify the master list.  It does, however,
+create the playlist as a separate file in the C<natooldat> directory.
+
+=head2 lspl [I<playlist_name>...]
+
+Prints out the name and contents of the given playlists.  If no other
+arguments are given, prints out all playlists.
+
+It reads but does not modify the master list.
+
+=head2 rmpl I<playlist_name>...
+
+C<rmpl> deletes the named playlist(s).  It reads but does not modify
+the master list.  Deleted playlists are typically renamed to have a
+tilde ("~") at the end of their names rather than being deleted.
+
+=head2 convert [--basename] [--no-newline] I<path>...
+
+Takes each I<path> argument, treats it as a Unix path and prints out
+the equivalent path on the Neuros.  The resulting path will have all
+illegal (or just suspicious) characters removed and replaced with
+C<%XX> sequences (where XX is the hex code for that byte).
+
+C<convert> does no checking with regards to the actual filesystem and
+assumes that the entire path will be relative to the Neuros mount
+point.
+
+This is mostly useful for doing things like finding out which files on
+your hard drive were copied to the Neuros, since C<natool> may have
+changed the names.  C<convert> will tell you how the name would have
+been changed.
+
+=head3 Options:
+
+=over 8
+
+=item B<--basename>
+
+If given, each path will first have any leading directories stripped
+off it.
+
+=item B<--no-newline>
+
+Normally, output paths are separated by newlines.  B<--no-newlines>
+causes them to be separated by single spaces instead.
+
+=back
+
+C<convert> does not read or modify the master list.
+
+
+=head2 dirsync [--fake] [--cleanup|--adopt] [--no-update] I<local_root> I<na_root>
+
+C<dirsync> attempts to make the contents of I<na_root> on the Neuros
+have the same audio files and directory layout as I<local_root> on the
+workstation in a manner somewhat similar to B<rsync>.  By default, it
+does this by copying files from the workstation to the Neuros if there
+is no corresponding file on the Neuros or if it looks like it has
+changed (i.e. has a different size or the local copy is has a later
+modification time--C<dirsync> does B<not> do a byte-by-byte
+comparison.)
+
+Changes are also reflected in the master list.
+
+C<dirsync> never deletes an audio file unless the C<--cleanup> option
+is given.  However, it will overwrite them.  If you're not sure that
+it will do the right thing, use the C<--fake> option first.
+
+=head3 Options:
+
+=over 8
+
+=item B<--fake>
+
+Does not copy any files.  Instead, it outputs a list of files it will
+copy or delete.  This list is formatted as a sequence of C<cp> and
+C<rm> commands and so is often a valid shell script.  (The only time
+it is not is when there are special characters in the filename that
+have not been properly escaped.)
+
+C<--fake> also implies C<--no-update>
+
+=item B<--cleanup>
+
+Normally, audio files in I<na_root> that do not have a corresponding
+file in I<local_root> are ignored.  If C<--cleanup> is given, C<dirsync>
+will delete them.
+
+It is a good idea to use this option if you only ever use C<dirsync>
+to update the audio files in I<na_root>.
+
+=item B<--adopt>
+
+Like C<--cleanup>, C<--adopt> takes care of files in I<na_root> that
+do not have corresponding files in I<local_root>.  However, it does so
+by copying the file from the Neuros to the workstation.
+
+=item B<--no-update>
+
+If C<--no-update> is given, C<dirsync> does not store changes in the
+master list.  It does not cause C<natool> to read the master list into
+memory.  If no master list exists, it does not create one.
+
+=back
+
+C<dirsync> both reads and modifies the master list unless
+C<--no-update> was given.
+
+=head3 Warning:
+
+There are two circumstances where two or more files on the workstation
+might have the same name on the Neuros.  They are:
+
+=over 8
+
+=item 1)
+
+If the files have the same spelling but differ in case.
+
+For example, "foo.mp3", "FOO.MP3" and "Foo.mp3" can all exist in the
+same directory on a Unix filesystem but will overwrite each other on
+the Neuros.
+
+=item 2)
+
+If the differences are truncated by filesystem limits.
+
+The Neuros's filesystem limits names to 256 (ASCII) characters.  (For
+safety, C<natool> actually truncates it to B<254> characters).  If the
+workstation's filesystem allows longer filenames and the difference
+between the two names comes after the 254'th character, one will
+overwrite the other.
+
+C<natool>'s way of dealing with non-ASCII characters makes this worse.
+Remember that non-ASCII bytes are replaced with C<%xx> sequences,
+potentially trippling the length of the filename.  So a filename
+consisting of 200-ish non-ASCII characters will be at least 600
+characters long on the Neuros.
+
+=back
+
+C<natool> can detect both of these cases but they are treated as fatal
+errors.  If this happens to you, you will need to rename any such
+files to have names that are unique on the Neuros.
+
+
+=head2 install [--no-update] I<audio_file>... I<dest_dir>
+
+Copies one or more audio files to the Neuros, adding it to the master
+list and adapting the name to be unique on the Neuros if necessary.
+Only the file(s) are copied--directory structure is ignored.
+
+I<dest_dir> must be the absolute path to a directory on the Neuros and
+the I<audio_file> paths should be on the workstation.
+
+=head3 Options:
+
+=over 8
+
+=item B<--no-update>
+
+If C<--no-update> is given, C<install> does not store changes in the
+master list.  If no master list exists, does not create one.
+
+=back
+
+C<install> both reads and modifies the master list unless
+C<--no-update> was given.
+
+
+=head2 remove [--keep] I<audio_file> ...
+
+Deletes one or more audio files from the Neuros and removes the file
+from the master list.  If one or more of the given files are missing
+or not in the master list, C<remove> will issue a warning but will
+keep going.
+
+=head3 Options:
+
+=over 8
+
+=item B<--keep>
+
+If C<--keep> is given, does not delete the actual file.  It only
+removes it from the master list.
+
+=back
+
+It may be easier, when you want to delete a large number of files, to
+delete them with C<rm -rf> followed by C<natool scan>.
+
+C<remove> reads and modifies the master list unless C<--keep> is
+given, in which case it does neither.
+
+=head2 drop
+
+C<drop> discards the current in-memory copy of the master list.  If a
+following command needs the master list, it will reload or recreate
+it.
+
+This is useful when you want to modify the WOID_DB database in some
+temporary way.  For example:
+
+    natool fix --album-artist-dir \
+        dbsync \
+        drop
+
+This command creates a WOID_DB database with a (possibly) better
+classification of album but it leaves the master list alone.  The
+final C<drop> keeps the changes made by the C<fix> command from being
+saved to disk.
+
+=head2 save
+
+C<save> causes C<natool> to immediately save the in-memory master list
+to disk.  If there is no master list in memory, C<save> does nothing.
+
+Since C<natool> automatically saves the master list when it has
+finished executing all subcommands, C<save> is only useful when used
+in conjunction with the C<drop> command.  For example:
+
+    natool dirsync --cleanup ~/music music \
+        save \
+        fix --album-artist-dir \
+        dbsync \
+        drop
+
+In the above example, the user first wants to install a number of
+audio files onto the Neuros, then create a WOID_DB database with
+(hypothetically) a better album differentiation scheme.  However (s)he
+only wants to keep the changes made by C<dirsync> and not those made
+by C<fix>.
+
+This example is identical to these two commands:
+
+    natool dirsync --cleanup ~/music music
+
+    natool fix --album-artist-dir \
+        dbsync \
+        drop
+
+However, it may be faster since C<natool> only has to load the master
+list from disk once.
+
+Note that C<natool> cannot tell if the master list has been saved
+since it was last modified, so C<save> will B<always> write it to disk.
+This:
+
+    natool dirsync --cleanup ~/music music \
+        save \
+        save
+
+will write the master list B<three times>.  (The third time is when
+C<natool> automatically saves the master list after all subcommands
+have been executed.)
+
+This is slow but harmless.
+
+
+=head2 fix [--dumb-artist-sort|--smart-artist-sort] [--count-sort[=I<count>]] [--album-artist] [--album-artist-dir]
+
+The C<fix> command controls the automated "correction" of audio
+metadata.  C<natool> normally avoids making any "clever" corrections
+to the metadata of the audio files it finds, working on the assumption
+that if you wanted those changed, you'd have done them yourself.
+However, there are a few such fixes that may come in handy.
+
+They are controlled via options to C<fix>:
+
+=head3 Options:
+
+=over 8
+
+=item B<--smart-artist-sort>
+
+When sorting the artist database (i.e. the list of artists that shows
+up in the "Artists" and "Albums->Artists" menus),
+C<--smart-artist-sort> causes C<natool> to make certain "common sense"
+adjustments.  Specifically, case is ignored, as is a leading "the".
+Thus, "The Airborn Toxic Event" is sorted near "Adam Again" instead of
+"The Brunching Shuttlecocks".
+
+This is the default but will override C<--dumb-artist-sort>.
+
+It does not modify the master list.
+
+=item B<--dumb-artist-sort>
+
+C<--dumb-artist-sort> forces C<natool> to sort the list of artists
+strictly lexically and case-sensitively.  It is used in regression
+testing because it guarantees a single unique order for all artists.
+
+If given, the option C<--smart-artist-smart> will override
+C<--dumb-artist-smart>.
+
+This flag does not modify the master list.
+
+=item B<--count-sort>[=I<count>]
+
+C<--count-sort> causes artists with less than I<count> audio files on
+the Neuros to be sorted lower than the others.  The resulting list has
+all the artists with I<count> or more, sorted normally, followed by
+all artists with less then I<count> artists also sorted normally.  In
+other words, the artist list is now split into two groups.
+
+This feature may be useful if you normally listen to albums but also
+download all kinds of random crap from the Internet.  This can result
+in a huge list of artists, most of which have one or two songs, making
+it hard to navigate the artist list. C<--count-sort> will put artists
+with albums in the first group and the other stuff in the second,
+making it a little easier to find an artist.
+
+The argument I<count> is optional.  If it is not given, it defaults to
+5.
+
+C<--count-sort> has no effect unless C<--smart-artist-sort> is also in
+effect.
+
+C<--count-sort> does not modify the master list.
+
+=item B<--album-artist>
+
+C<--album-artist> modifies the name of each album in the master list
+to make it unique to the artist.  Currently, the Neuros will treat
+albums as unique and interpret an two albums with different artists as
+a compilation, with the album appearing in both artists' album lists
+and containing songs from all of them.
+
+So if, for example, both U2 and KMFDM have an album called "War", the
+Neuros will play both of them interleaved when you try to play one.
+
+Using C<fix --album-artist> will change the names of the albums to
+make them unique.  Thus, "War" would become "War (U2)" and "War
+(KMFDM)" and they would be filed under their respective artists'
+names.
+
+This almost never happens in real life except for one case:
+"UnknownAlbum".  A lot of the random crap you find on the Internet
+will have the album tag unset, resulting in a huge "compilation album"
+called "UnknownAlbum".  If you use C<fix --album-artist>, these will
+be split up between their individual artists.
+
+C<--album-artist> B<does> modify the master list.
+
+=item B<--album-artist-dir>
+
+C<--album-artist-dir> behaves just like C<--album-artist> except that
+in addition to making albums unique to the artist, it also makes them
+unique to the directory they occupy.
+
+This is mostly useful in two cases: you have some untagged audio files
+but you've organized them one album per directory or you have multiple
+copies of the same album in different directories.  The latter is
+helpful in the case where you download a couple of sample songs off
+the artist's website, then decide to buy the entire album and forget
+to delete the freebie.
+
+However, if you have many albums that are spread across multiple
+directories, this is probably not what you want.
+
+C<--album-album-dir> B<does> modify the master list.
+
+=back
+
+C<fix> always reads the master list and may modify it.
+
+
+=head2 lsartists [--albums] [--files|--titles]
+
+C<lsartists> prints out the list of artists and related information in
+the master list.  Sort order is the same as that used for the artist
+list on the Neuros (i.e. the order specified by the C<fix> command).
+
+=head3 Options:
+
+=over 8
+
+=item B<--albums>
+
+If given, causes C<lsartists> to print out each artists' albums as
+well.  Album names are sorted alphabetically.  They are printed out
+indented by four (4) spaces.
+
+=item B<--titles>
+
+If given, causes C<lsartists> to print out the titles of the audio
+files in each album, indented by eight (8) spaces.  Implies
+C<--albums> and supersedes C<--files>.
+
+Titles are printed out in no particular order.  This could be
+considered a bug.
+
+=item B<--files>
+
+If given, causes C<lsartists> to print out the paths to the audio
+files in each album indented by eight (8) spaces.  Implies C<--albums>
+and is superseded by C<--titles>.
+
+Filenames are printed out in no particular order.  This could be
+considered a bug.
+
+=back
+
+C<lsartists> reads but does not modify the master list.
+
+
+=head1 ARGUMENT FILES
+
+Since there is often an operating-system-imposed limit to the length
+of a command-line argument, C<natool> provides a way to specify
+arguments from a text file.  These argument files are specified with
+the B<--args> command-line argument.
+
+B<--args> takes one argument, the filename, and the contents of this
+file is immediately inserted into the command line before most other
+processing is done.  Thus, B<--args> may be used anywhere in the
+command line.
+
+=head2 Argument File Syntax
+
+Argument files have a special syntax similar to that of the shell:
+
+=over 4
+
+=item 1.
+
+Lines beginning with "#" are considered comments and ignored.
+
+For example:
+
+    # This is a comment
+
+Not that a "#" anywhere else in the line does B<not> start a comment.
+
+=item 2.
+
+Any sequence of non-space characters is considered a C<word>,
+equivalent to a single shell word on the command-line.
+
+Example:
+
+    foo bar quux
+
+=item 3.
+
+Whitespace separates C<words>.  All unescaped space characters
+(spaces, tabs, newlines, etc) are considered interchangable and any
+sequence of spaces is equivalent to a single space.
+
+Example:
+
+    foo            bar
+    foo bar
+
+are equivalent.
+
+=item 4.
+
+Spaces may be escaped with the backslash ("\") character to make the
+space part of the word, just like the shell.
+
+Examples:
+
+    foo\ bar
+
+    foo\
+    bar
+
+These are both one-word tokens with a space and newline respectively
+between the "foo" and "bar".
+
+Unlike the shell, any other character prefaced with the backslash is
+replaced with itself:
+
+    foo\n
+
+    bar\wquux
+
+    foo\\bar
+
+The following become "foon", "barwquux" and "foo\bar".
+
+There are no special backslash sequences like there are in shell (or
+Perl, or C).
+
+=item 5.
+
+Any sequence of characters quoted with double quotes ('"') make one
+C<word>.  Double quotes may be escaped with the backslash (C<\>).
+
+Examples:
+
+    "01-The Age Of Electric-Make A Pest A Pet-Remote Control.mp3"
+
+    "What do you mean, \"Pumpkin, Mrs. Farnsworth\"?.mp3"
+
+Unlike Perl or shell, single quotes ("'") do not have any special
+meaning, nor does any kind of sequence following the dollar sign
+("$").
+
+=back
+
+Remember: argument files' syntax is similar but B<not identical> to
+what you type on the command line.  People used to thinking like
+shell-script writers need to keep that in mind.
+
+=head1 ENVIRONMENT
+
+=over 12
+
+=item NATOOL_NEUROS_PATH
+
+The path to the mountpoint of the Neuros audio player currently being
+configured.  Overridden by B<--neuros-path>.
+
+=back
+
+=head1 FILES
+
+=over 12
+
+=item $NATOOL_NEUROS_PATH/natooldat/audio.mls
+
+This is the B<master list>.  It is the file that contains all of the
+audio metadata that C<natool> knows about.  It is an ASCII text file
+(non-ASCII characters are not allowed) consisting of one record per
+audio file.  Each record occupies one line and fields are delimited by
+tab characters.  Thus, fields are not allowed to contain tabs or newlines.
+
+Field order is:
+
+    file date size genre album artist length tracknumber title
+
+C<size>, C<length> and C<tracknumber> are numeric values.  All others
+are strings.  C<size> is the size in bytes while C<length> is running
+time in seconds.  C<tracknumber> is the position within the album or 0
+if unset.
+
+C<file> is in the wierd DOS/UNIX-hybrid format that Neuros uses for
+audio file paths: forward slashes ("/") as directory separators but
+starting with C<C:>.
+
+=item $NATOOL_NEUROS_PATH/natooldat/*.npl
+
+Files ending in C<.npl> in the C<natooldat> directory are playlists.
+
+Each playlist contains the list of audio files to play, one file per
+line.  File paths are in the same format as they are in the master
+list.  No blank lines or extraneous whitespace characters are
+allowed.
+
+Filenames are just the names of the playlist and subject to the naming
+rules enforced by C<natool addpl>.  If you rename one, the new name
+may only contain alpha-numeric characters or the underscore ("_") and
+must be no more than 63 characters long (not including the ".npl"
+extension.
+
+=item $NATOOL_NEUROS_PATH/natooldat/*~
+
+C<natool> will often backup files by appending a tilde ("~") to the
+end of the filename.  These stay behind in C<natooldat>.  It is safe
+to delete these files by hand.
+
+Deleted playlists will usually leave such a backup behind.
+
+=back
+
+=head1 BUGS AND QUIRKS
+
+=over 4
+
+=item *
+
+C<natool> does not know about recordings.  Invoking C<dbsync> will
+empty out the recordings database but leave the recordings themselves
+alone.  Note, however, that C<scan> will find recordings and add them
+to the master list.  This may or may not be desirable.
+
+If you want to automatically handle recordings in some special way,
+the easiest way to do it is probably to write a script
+moves/renames/whatevers the recording, then invokes C<natool>.
+
+=item *
+
+C<natool> cannot tell the difference between a corrupt audio file (or
+a non-audio file with the wrong extension) and a valid audio file that
+has no metadata.  When encountering the former, it will assume the
+file is the latter.
+
+=item *
+
+C<natool> does not always guarantee that two audio files on the
+workstation will have different names on the Neuros.  See the section
+on the B<dirsync> subcommand for details.
+
+=item *
+
+C<natool> could be smarter about writing out the master list when it
+has not changed in memory since the last such write.  It currently
+errs on the side of caution so the worst that can happen is that it
+will take longer.
+
+See the entries for B<save> and B<drop> for more details.
+
+=item *
+
+Internationalization support is weak.
+
+The Neuros 2 only understands 7-bit ASCII and C<natool> ensures that
+all strings are converted to this.  It also (mostly) makes sure that
+two different non-ASCII strings are converted to different ASCII
+strings and converts B<some> special Latin-1 characters to rough ASCII
+equivalents, but aside from that, it's blanks or question-marks all
+around.
+
+This means that while C<natool> is okay for audio files with the
+occasional non-ASCII character in the filename or metadata, you won't
+get much in the way of readable labels if the tags aren't mostly
+ASCII.
+
+=item *
+
+C<natool> will only produce a valid WOID_DB database for audio players
+with the "backpack" hard-drive.  (But that's okay--nobody uses a
+Neuros without the hard drive, right?)
+
+=item *
+
+C<natool> has only been tested on version 2.28 of the Neuros firmware.
+Older versions may not work.  (Reports of success or failure with
+other versions are appreciated.)
+
+=item *
+
+The WOID_DB databases produced by C<natool> are incorrect in at least
+one way: the "playlist" field in the master MDB record is never set,
+even if a file belongs to the playlist.  However, the corresponding
+C<PAI> and C<SAI> B<do> point to the MDB files that should be
+referencing the playlist, so playlists work.  This appears to be case
+of two bugs cancelling each other out.
+
+(If this makes no sense to you, don't worry about it.)
+
+=back
+
+=head1 AUTHOR
+
+Chris Reuter <chris@blit.ca> wrote most of it.
+
+The WOID_DB database writer started out as part of sorune, written by
+Darren Smith.
+
+The package also includes unmodified versions of the MP3::Info and
+Ogg::Vorbis::Header::PurePerl modules from CPAN.  The former was
+written by Dan Sully and Chris Nandor and the latter by Andrew Molloy.
+
+=head1 COPYRIGHT AND LICENSING
+
+Copyright (C) 2008 Chris Reuter and others.
+
+This is free software. You may redistribute copies of it under the
+terms of the GNU General Public License
+L<http://www.gnu.org/licenses/gpl.html>.  There is B<NO WARRANTY>, to
+the extent permitted by law.
+
+For precise details, see the file "Copyright.txt" that should have
+been included with this software.
+
+=head1 DISCLAIMERS
+
+Neuros is a trademark of Neuros Audio LLC.
+
+The author of C<natool> is in no way endorsed by or affiliated with
+Neuros Audio LLC or related entities or people.
+
+You use this software at your own risk.
+
+
+
+

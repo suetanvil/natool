@@ -1,0 +1,20 @@
+#!/usr/bin/perl
+
+
+# Set the include path to find the rest of natool.
+BEGIN {
+  use File::Basename;
+  use Cwd 'abs_path';
+
+  my $path = abs_path(dirname(__FILE__) . '/..');
+
+  unshift @INC, "$path";
+  unshift @INC, "$path/CPAN";
+};
+
+use Neuros::Main;
+
+Neuros::Main::Go();
+
+
+

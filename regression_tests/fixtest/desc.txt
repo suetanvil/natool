@@ -1,0 +1,11 @@
+test-1 -- Basic test of 'fix --album-artist-dir'
+test-2 -- Same as test 1 with just '--album-artist'.  (Should do nothing).
+test-3 -- Test 'fix --album-artist-dir' with multiple dirs.
+test-4 -- Test basic 'fix --album-artist'.
+test-5 -- Test basic 'fix --album-artist' when all albums are already unique.
+test-6 -- Test basic 'fix --album-artist-dir' when albums are already unique.
+test-7 -- Test 'fix --album-artist-dir' with mult. dirs and albums.
+test-8 -- Test 'fix --album-artist-dir' with mult. dirs for each
+	      duplicated album title.  (This numbers them all, which isn't
+		  really ideal, but whatever.)
+	

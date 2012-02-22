@@ -1,0 +1,6 @@
+# This is the argument file for natool when called from test.sh.  It
+# is here so we can have a live test of the --args flag.
+
+--neuros-path "."
+--no-check
+--verbose

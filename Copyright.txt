@@ -1,0 +1,35 @@
+natool is:
+	
+	Copyright (C) 2008 Chris Reuter. All rights reserved.
+
+It incorporates code from Sorune, which is:
+
+	Copyright (C) 2004-2005 Darren Smith.
+
+It includes the Perl module 'MP3::Info', which is:
+
+	Copyright (c) 2006-2007 Dan Sully & Logitech. All rights reserved.
+	Copyright (c) 1998-2005 Chris Nandor. All rights reserved.
+
+It also includes the Perl module 'Ogg::Vorbis::Header::PurePerl' which
+is:
+	 Copyright (c) 2003, Andrew Molloy.  All Rights Reserved.
+
+It also includes the Perl module 'Class::Std', which is:
+
+	Copyright (c) 2005, Damian Conway
+
+natools is Free Software under the terms of the GNU General Public
+License version 2.0.  You should have a copy of this license in the
+file LICENSE.GPL.
+
+Additionally, the modules 'MP3::Info' and 'Class::Std' may be
+redistributed under other terms, specifically the same terms as Perl
+itself.
+
+The file "ogg-test-file.ogg" is a sound-effect taken from the
+gnome-games package.  Precise copyright details are unknown but it is
+released under either the GNU GPL or the GNU GFDL+ license.
+
+
+
