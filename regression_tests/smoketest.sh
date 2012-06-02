@@ -6,13 +6,13 @@ set -e
 
 export NATOOL_NEUROS_PATH="$1"
 
-if [[ ! -d $NATOOL_NEUROS_PATH ]]; then
+if [ ! -d $NATOOL_NEUROS_PATH ]; then
 	echo "Invalid neuros path: '$NATOOL_NEUROS_PATH'"
 	exit 1
 fi
 
 
-if [[ ! -x ../bin/natool ]]; then
+if [ ! -x ../bin/natool ]; then
 	echo "Unable to find 'natool'."
 	exit 1
 fi
@@ -23,18 +23,18 @@ REF=orig-ml
 VERBOSE=
 NAF="$NATOOL_NEUROS_PATH"
 
-function run {
+run () {
 	echo "Running: '$*'"
 	eval $*
 }
 
-function die {
+die () {
 	echo -n "Error: "
 	echo $*
 	exit 1
 }
 
-function check {
+check () {
 	while [ -n "$1" ]; do
 		cmp "$NAF/$1" "$REF/$1" \
 			|| die "File '$1' does not match reference."
