@@ -124,7 +124,7 @@ use Neuros::Util;
         $action->($relPath);
       };
 
-    find($wanted, $root);
+    find({wanted => $wanted, follow => 1}, $root);
 
     return;
   }
