@@ -1,21 +1,17 @@
-
-Introduction
-------------
+# Introduction
 
 natool is a command-line synch manager for the Neuros II Digital Audio
 Computer.
 
 
-Requirements
-------------
+# Requirements
 
 To run natool, you need:
 
-    1) A unix-ish workstation (e.g. a PC running Linux or *BSD--I used
-       Fedora Core 8).
+1. A unix-ish workstation (e.g. a PC running Linux or *BSD).
 
-    2) A recentish version of Perl.  (I used 5.8.8 but anything in the
-       5.8 will probably work.
+2. A non-ancient version of Perl.  (I used 5.8.8, so you're unlikely
+to find one that won't work.)
 
 It *might* work under Cygwin but hasn't been tested.  natool assumes
 that the workstation's filesystem is case-sensitive.  If this is not
@@ -24,8 +20,7 @@ in some rare circumstances.  natool also assumes Unix-style paths so
 avoid using Windows-style paths under Cygwin.
 
 
-Running Without Installing
---------------------------
+# Running Without Installing
 
 You can run natool from the source directory by typing
 
@@ -39,8 +34,7 @@ natool to another directory.  This is because natool needs the leading
 path to find its libraries.
 
 
-Installation
-------------
+# Installation
 
 natool uses a non-standard installation scheme designed to make it as
 self-contained as possible.  To install natool in /usr/local:
@@ -62,8 +56,7 @@ You must have permission to write to the destination directory for
 this to work.
 
 
-Hacking Hints
--------------
+# Hacking Hints
 
 The directory 'regression_tests contains a collection of regression
 tests.  The script 'test.sh' runs those tests and also the unit tests
@@ -79,9 +72,7 @@ source code for the final reference on what is and is not allowed by
 the Neuros.
 
 
-
-See also:
----------
+# See also:
 
     natool.1.pod  -- the man page.
     Copyright.txt -- the copyright statement.

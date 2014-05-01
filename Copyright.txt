@@ -1,6 +1,6 @@
 natool is:
 	
-	Copyright (C) 2008 Chris Reuter. All rights reserved.
+	Copyright (C) 2008-2014 Chris Reuter. All rights reserved.
 
 It incorporates code from Sorune, which is:
 

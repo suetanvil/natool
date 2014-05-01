@@ -1,4 +1,4 @@
-# Copyright (C) 2008 Chris Reuter et. al. See Copyright.txt. GPL. No Warranty.
+# Copyright (C) 2014 Chris Reuter et. al. See Copyright.txt. GPL. No Warranty.
 
 # Instances hold a collection of file pairs representing the status of
 # the source and destination directory trees.

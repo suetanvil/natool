@@ -291,7 +291,7 @@ sub printVersion {
   print <<"EOF";
 natool version $version
 
-Copyright (C) 1998-2008 Chris Reuter and others.  See the file
+Copyright (C) 1998-2014 Chris Reuter and others.  See the file
 "Copyright.txt" for details.
 
 EOF
