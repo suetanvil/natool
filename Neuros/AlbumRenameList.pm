@@ -169,8 +169,10 @@ between them by album name.
 
       if ($isByDir{ident $self}) {
         my $dir = dirname($file);
-        $seenPaths{$dir} = $pathCount++
-          unless exists($seenPaths{$dir});
+        if (! exists($seenPaths{$dir}) ) {
+          $seenPaths{$dir} = $pathCount;
+          ++$pathCount;
+        }
 
         $artistKey = "$seenPaths{$dir},$artistKey";
       }
@@ -226,8 +228,7 @@ between them by album name.
       # become "$artist [2]".
       my %artistCount = ();
       if ($isByDir{ident $self}) {
-
-        for my $artist (keys %{$albumHash->{$album}}) {
+        for my $artist (sort keys %{$albumHash->{$album}}) {
           my $pname = $self->_properArtistName($artist);
           $artistCount{$pname}++;
 
@@ -238,7 +239,7 @@ between them by album name.
 
       # And add artist name to the modifiers
       my $newAlbumNames = $newAlbumNames{ident $self};
-      for my $artist (keys %{$albumHash->{$album}} ) {
+      for my $artist (sort keys %{$albumHash->{$album}} ) {
         my $realArtist = $self->_properArtistName($artist);
 
         my $newName = $newAlbumNames->{$artist}->{$album};
@@ -251,7 +252,7 @@ between them by album name.
         $newName = uniqueKey ($newName, \%seenAlbums);
 
         $newAlbumNames->{$artist}->{$album} = $newName;
-        $seenAlbums{$newAlbumNames} = 1;
+        $seenAlbums{$newName} = 1;
       }
     }
 
